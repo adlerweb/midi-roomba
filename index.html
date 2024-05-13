@@ -193,6 +193,7 @@
       const useG4 = document.getElementById("g4toggle").checked;
       const replacem300 = document.getElementById("experimentaltoggle").checked;
       
+      
       // Clear previous scheduled tones
       Tone.Transport.stop();
       Tone.Transport.cancel();
@@ -202,6 +203,10 @@
         return;
       }
       if (replacem300) {
+        if (!useG4) {
+          alert("You must use G4 to use this feature.")
+          return
+        }
         alert("Note: this is very experimental, use with caution.")
       }
 
