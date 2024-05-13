@@ -23,6 +23,10 @@
     <input type="checkbox" id="g4toggle">
     <label for="g4toggle"> Add G4 after M300 (required for Duet)</label>
   </div>
+  <div>
+    <input type="checkbox" id="experimentaltoggle">
+    <label for="experimentaltoggle">Replace M300 PXXX S0 with G4 PXXX (must have G4 checked)</label>
+  </div>
   <br>
   <textarea id="outputArea" rows="20" cols="50"></textarea>
   <script>
@@ -64,30 +68,27 @@
     });
     
     function calculateGcodeLength(gcodeLines) {
-        let lastNoteEndTime = 0; // Initialize the end time of the last note
-        let currentTime = 0; // Track the current time as we process each line
+      let totalTime = 0; // Initialize the total time
 
-        gcodeLines.forEach(line => {
-            let match = line.match(/M300.*P(\d+)/i); // Match M300 command with duration
-            if (match) {
-                const duration = parseInt(match[1], 10); // Parse the duration
-                currentTime += duration; // Increment current time by this duration
-                lastNoteEndTime = currentTime; // Update the end time of the last note
-            }
+      gcodeLines.forEach(line => {
+        const match = line.match(/M300.*P(\d+)/i); // Match M300 command with duration
+        if (match) {
+          const duration = parseInt(match[1], 10); // Parse the duration
+          totalTime += duration; // Accumulate total time with this duration
+        }
 
-            // Optional: If using G4 for pauses between notes, handle it similarly
-            match = line.match(/G4 P(\d+)/i);
-            if (match) {
-                const pauseDuration = parseInt(match[1], 10); // Parse the pause duration
-                currentTime += pauseDuration; // Increment current time by this pause duration
-                // No need to update lastNoteEndTime since G4 doesn't indicate a note's end
-            }
-        });
-    
-        // Convert the last note end time from milliseconds to seconds for the final value
-        // This is when the last note ends, and the loop can potentially restart
-        return lastNoteEndTime / 1000;
+        // If using G4 for pauses between notes, include them in the total duration
+        const g4Match = line.match(/G4 P(\d+)/i);
+        if (g4Match) {
+          const pauseDuration = parseInt(g4Match[1], 10); // Parse the pause duration
+          totalTime += pauseDuration; // Accumulate total time with this pause duration
+        }
+      });
+
+      // Convert the total time from milliseconds to seconds for the final value
+      return totalTime / 1000;
     }
+
 
     function mirrorGcodeToDisplay() {
       const gcodeText = document.getElementById("outputArea").value;
@@ -190,7 +191,8 @@
 
     function handleMidi() {
       const useG4 = document.getElementById("g4toggle").checked;
-
+      const replacem300 = document.getElementById("experimentaltoggle").checked;
+      
       // Clear previous scheduled tones
       Tone.Transport.stop();
       Tone.Transport.cancel();
@@ -198,6 +200,9 @@
       if (!midi) {
         alert("No MIDI provided.");
         return;
+      }
+      if (replacem300) {
+        alert("Note: this is very experimental, use with caution.")
       }
 
       const track = { notes: [] };
@@ -283,10 +288,11 @@
         Tone.Transport.schedule(playNote(frequency, trimmedDuration * tempoMultiplier), time * tempoMultiplier);
 
         // If the current note is released before the start of the next note, insert a pause
-        if (pauseDuration >= minDuration) {
+        if (pauseDuration >= minDuration && !replacem300) {
           gcode.push(
             `M300 P${Math.round(pauseDuration * tempoMultiplier * 1000)} S0\n`
           );
+
           if (useG4) {
             gcode.push(
               `G4 P${Math.round(pauseDuration * tempoMultiplier * 1000)}\n`
