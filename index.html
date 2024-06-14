@@ -1,317 +1,331 @@
 <!DOCTYPE html>
 <html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css">
+    <title>MIDI to Roomba</title>
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <link rel="stylesheet" href="styles.css">
-  <title>MIDI to M300</title>
-</head>
+  <body>
+    <script src="https://unpkg.com/@tonejs/midi"></script>
+    <script type="text/javascript" src="https://unpkg.com/tone@13.4.9/build/Tone.js"></script>
+    <h1>MIDI to Roomba Converter</h1>
+    <div>
+      <input type="file" id="filereader" />
+      <div id="trackInfo"></div>
+      <button type="button" id="start" onclick="handleMidi()">Generate</button>
+      <button type="button" id="previewStart" onclick="togglePreview()">Play Preview</button>
+      <button type="button" id="previewStop" onclick="stopPreview()">Stop Preview</button>
+      <button type="button" id="loopToggle" onclick="toggleLoop()">Toggle Loop</button>
+    </div>
+    <br>
+    <b>Beware:</b> These are the RAW notes without required command headers. As memory is limited you are most likely unable to load the song onto your robot anyway. There is a player script to add headers and stream the data inside the repository.
+    <textarea id="outputArea" rows="20" cols="50"></textarea>
+    <script>
+      let midi = null;
+      let isLooping = false;
+      document.getElementById('outputArea').value = '';
 
-<body>
-  <script src="https://unpkg.com/@tonejs/midi"></script>
-  <script type="text/javascript" src="https://unpkg.com/tone@13.4.9/build/Tone.js"></script>
-  <h1>MIDI to M300 Converter</h1>
-  <div>
-    <input type="file" id="filereader" />
-    <div id="trackInfo"></div>
-    <button type="button" id="start" onclick="handleMidi()">Generate</button>
-    <button type="button" id="previewStart" onclick="togglePreview()">Play Preview</button>
-    <button type="button" id="previewStop" onclick="stopPreview()">Stop Preview</button>
-    <button type="button" id="loopToggle" onclick="toggleLoop()">Toggle Loop</button>
-  </div>
-  <div>
-    <input type="checkbox" id="g4toggle">
-    <label for="g4toggle"> Add G4 after M300 (required for Duet)</label>
-  </div>
-  <div>
-    <input type="checkbox" id="experimentaltoggle">
-    <label for="experimentaltoggle">Replace M300 PXXX S0 with G4 PXXX (must have G4 checked)</label>
-  </div>
-  <br>
-  <textarea id="outputArea" rows="20" cols="50"></textarea>
-  <script>
-    let midi = null;
-    let isLooping = false;
-    document.getElementById('outputArea').value = '';
+      const roombaNotes = {'31': {'note': 'G', 'frequency': 49.0}, '32': {'note': 'G#', 'frequency': 51.0}, '33': {'note': 'A', 'frequency': 55.0}, '34': {'note': 'A#', 'frequency': 58.3}, '35': {'note': 'B', 'frequency': 61.7}, '36': {'note': 'C', 'frequency': 65.4}, '37': {'note': 'C#', 'frequency': 69.3}, '38': {'note': 'D', 'frequency': 73.4}, '39': {'note': 'D#', 'frequency': 77.8}, '40': {'note': 'E', 'frequency': 82.4}, '41': {'note': 'F', 'frequency': 87.3}, '42': {'note': 'F#', 'frequency': 92.5}, '43': {'note': 'G', 'frequency': 98.0}, '44': {'note': 'G#', 'frequency': 103.8}, '45': {'note': 'A', 'frequency': 110.0}, '46': {'note': 'A#', 'frequency': 116.5}, '47': {'note': 'B', 'frequency': 123.5}, '48': {'note': 'C', 'frequency': 130.8}, '49': {'note': 'C#', 'frequency': 138.6}, '50': {'note': 'D', 'frequency': 146.8}, '51': {'note': 'D#', 'frequency': 155.6}, '52': {'note': 'E', 'frequency': 164.8}, '53': {'note': 'F', 'frequency': 174.6}, '54': {'note': 'F#', 'frequency': 185.0}, '55': {'note': 'G', 'frequency': 196.0}, '56': {'note': 'G#', 'frequency': 207.7}, '57': {'note': 'A', 'frequency': 220.0}, '58': {'note': 'A#', 'frequency': 233.1}, '59': {'note': 'B', 'frequency': 246.9}, '60': {'note': 'C', 'frequency': 261.6}, '61': {'note': 'C#', 'frequency': 277.2}, '62': {'note': 'D', 'frequency': 293.7}, '63': {'note': 'D#', 'frequency': 311.1}, '64': {'note': 'E', 'frequency': 329.6}, '65': {'note': 'F', 'frequency': 349.2}, '66': {'note': 'F#', 'frequency': 370.0}, '67': {'note': 'G', 'frequency': 392.0}, '68': {'note': 'G#', 'frequency': 415.3}, '69': {'note': 'A', 'frequency': 440.0}, '70': {'note': 'A#', 'frequency': 466.2}, '71': {'note': 'B', 'frequency': 493.9}, '72': {'note': 'C', 'frequency': 523.3}, '73': {'note': 'C#', 'frequency': 554.4}, '74': {'note': 'D', 'frequency': 587.3}, '75': {'note': 'D#', 'frequency': 622.3}, '76': {'note': 'E', 'frequency': 659.3}, '77': {'note': 'F', 'frequency': 698.5}, '78': {'note': 'F#', 'frequency': 740.0}, '79': {'note': 'G', 'frequency': 784.0}, '80': {'note': 'G#', 'frequency': 830.6}, '81': {'note': 'A', 'frequency': 880.0}, '82': {'note': 'A#', 'frequency': 932.3}, '83': {'note': 'B', 'frequency': 987.8}, '84': {'note': 'C', 'frequency': 1046.5}, '85': {'note': 'C#', 'frequency': 1108.7}, '86': {'note': 'D', 'frequency': 1174.7}, '87': {'note': 'D#', 'frequency': 1244.5}, '88': {'note': 'E', 'frequency': 1318.5}, '89': {'note': 'F', 'frequency': 1396.9}, '90': {'note': 'F#', 'frequency': 1480.0}, '91': {'note': 'G', 'frequency': 1568.0}, '92': {'note': 'G#', 'frequency': 1661.2}, '93': {'note': 'A', 'frequency': 1760.0}, '94': {'note': 'A#', 'frequency': 1864.7}, '95': {'note': 'B', 'frequency': 1975.5}, '96': {'note': 'C', 'frequency': 2093.0}, '97': {'note': 'C#', 'frequency': 2217.5}, '98': {'note': 'D', 'frequency': 2349.3}, '99': {'note': 'D#', 'frequency': 2489.0}, '100': {'note': 'E', 'frequency': 2637.0}, '101': {'note': 'F', 'frequency': 2793.8}, '102': {'note': 'F#', 'frequency': 2960.0}, '103': {'note': 'G', 'frequency': 3136.0}, '104': {'note': 'G#', 'frequency': 3322.4}, '105': {'note': 'A', 'frequency': 3520.0}, '106': {'note': 'A#', 'frequency': 3729.3}, '107': {'note': 'B', 'frequency': 3951.1}, '108': {'note': 'C', 'frequency': 4186.0}, '109': {'note': 'C#', 'frequency': 4434.9}, '110': {'note': 'D', 'frequency': 4698.6}, '111': {'note': 'D#', 'frequency': 4978.0}, '112': {'note': 'E', 'frequency': 5274.0}, '113': {'note': 'F', 'frequency': 5587.7}, '114': {'note': 'F#', 'frequency': 5919.9}, '115': {'note': 'G', 'frequency': 6271.9}, '116': {'note': 'G#', 'frequency': 6644.9}, '117': {'note': 'A', 'frequency': 7040.0}, '118': {'note': 'A#', 'frequency': 7458.6}, '119': {'note': 'B', 'frequency': 7902.1}, '120': {'note': 'C', 'frequency': 8372.0}, '121': {'note': 'C#', 'frequency': 8869.8}, '122': {'note': 'D', 'frequency': 9397.3}, '123': {'note': 'D#', 'frequency': 9956.1}, '124': {'note': 'E', 'frequency': 10548.1}, '125': {'note': 'F', 'frequency': 11175.3}, '126': {'note': 'F#', 'frequency': 11839.8}, '127': {'note': 'G', 'frequency': 12543.9}}
 
-    let synth = new Tone.Synth({
-      oscillator: {
-        type: 'square'
-      }
-      ,
-      envelope: {
-        attack: 0,
-        decay: 0,
-        sustain: 1,
-        release: 0.001
-      }
-    }
-    ).toMaster();
-
-    synth.volume.value = -25;
-
-    document.getElementById("filereader").addEventListener("change", e => {
-      const files = e.target.files;
-      if (files.length > 0) {
-        const file = files[0];
-        const reader = new FileReader();
-        reader.onload = function (e) {
-          midi = new Midi(e.target.result);
-          if (!midi) {
-            alert("Invalid file provided.");
-            return;
-          }
-          generateTrackInfo(midi);
-        };
-        reader.readAsArrayBuffer(file);
-      }
-    });
-    
-    function calculateGcodeLength(gcodeLines) {
-      let totalTime = 0; // Initialize the total time
-
-      gcodeLines.forEach(line => {
-        const match = line.match(/M300.*P(\d+)/i); // Match M300 command with duration
-        if (match) {
-          const duration = parseInt(match[1], 10); // Parse the duration
-          totalTime += duration; // Accumulate total time with this duration
+      let synth = new Tone.Synth({
+        oscillator: {
+          type: 'square'
         }
+        ,
+        envelope: {
+          attack: 0,
+          decay: 0,
+          sustain: 1,
+          release: 0.001
+        }
+      }
+      ).toMaster();
 
-        // If using G4 for pauses between notes, include them in the total duration
-        const g4Match = line.match(/G4 P(\d+)/i);
-        if (g4Match) {
-          const pauseDuration = parseInt(g4Match[1], 10); // Parse the pause duration
-          totalTime += pauseDuration; // Accumulate total time with this pause duration
+      synth.volume.value = -25;
+
+      document.getElementById("filereader").addEventListener("change", e => {
+        const files = e.target.files;
+        if (files.length > 0) {
+          const file = files[0];
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            midi = new Midi(e.target.result);
+            if (!midi) {
+              alert("Invalid file provided.");
+              return;
+            }
+            generateTrackInfo(midi);
+          };
+          reader.readAsArrayBuffer(file);
         }
       });
-
-      // Convert the total time from milliseconds to seconds for the final value
-      return totalTime / 1000;
-    }
-
-
-    function mirrorGcodeToDisplay() {
-      const gcodeText = document.getElementById("outputArea").value;
-      const gcodeDisplay = document.getElementById("outputArea");
-      gcodeDisplay.innerHTML = ''; // Clear previous content
-
-      gcodeText.split("\n").forEach((line, index) => {
-        const lineSpan = document.createElement("span");
-        lineSpan.textContent = line + "\n"; // Add line break for display
-        lineSpan.id = `gcode-line-${index}`; // Unique ID for each line
-        gcodeDisplay.appendChild(lineSpan);
-      });
-    }
-
-    function playNote(frequency, duration) {
-      // Simulate a startup time of 5ms
-      return (time) => { synth.triggerAttackRelease(frequency, duration / 1000, time) };
-    }
-
-    function toggleLoop() {
-      isLooping = !isLooping; // Toggle looping state
-      document.getElementById('loopToggle').innerText = isLooping ? "Disable Loop" : "Enable Loop";
-
-      if (isLooping) {
-        const gcode = document.getElementById("outputArea").value.split("\n");
-        const gcodeLength = calculateGcodeLength(gcode);
-        Tone.Transport.loop = true;
-        Tone.Transport.loopStart = 0;
-        Tone.Transport.loopEnd = gcodeLength; // Set loop end to the calculated GCODE time
-      } else {
-        Tone.Transport.loop = false;
-      }
-    }
-
-
-    function togglePreview() {
-      if (isLooping) {
-        alert("You must have the GCODE running first!")
-      } else{
-        const gcodeLines = document.getElementById("outputArea").value.split("\n");
-        parseAndPlayGcode(gcodeLines);
-      }
-    }
-
-    function parseAndPlayGcode(gcodeLines) {
-      // Stop and clear the current Transport schedule
-      Tone.Transport.cancel();
-      Tone.Transport.stop();
-
-      let currentTimeframe = 0; // Keep track of cumulative time for note scheduling
-
-      // Parse each line of GCODE and schedule notes
-      gcodeLines.forEach(line => {
-        const match = line.match(/M300 P(\d+) S(\d+)/);
-        if (match) {
-          const duration = parseInt(match[1], 10) / 1000; // Convert duration from ms to seconds
-          const frequency = parseInt(match[2], 10); // S parameter for frequency
-          Tone.Transport.schedule(time => {
-            synth.triggerAttackRelease(frequency, duration, time);
-          }, currentTimeframe);
-
-          // Increment the currentTime by the note's duration for the next scheduling
-          currentTimeframe += duration;
-        }
-      });
-
-      // After scheduling all notes, start the Transport
-      if (isLooping) {
-        const gcodeLength = calculateGcodeLength(gcode);
-      }
-      Tone.Transport.start();
-    }
-
-    
-    
-    function stopPreview() {
-      Tone.Transport.stop();
-      if (isLooping) {
-        toggleLoop()
-      }
-    }
-
-    function generateTrackInfo(midi) {
-      let infoDiv = document.getElementById("trackInfo");
-      infoDiv.innerHTML = '';
-      const trackSelectors = midi.tracks.forEach((track, index) => {
-        infoDiv.innerHTML += `<input id="trackButton${index}" type="checkbox" value=${index}> Track ${index +
-          1}: ${track.instrument.name} - ${track.notes.length} notes<br>`;
-      });
-      infoDiv.innerHTML +=
-        'Speed multiplier: <input id="speedMultiplierInput" type="number" step="0.01" min="0.01" value="1">';
-      document.getElementById("trackButton0").checked = true;
-    }
-
-    // From https://gist.github.com/YuxiUx/ef84328d95b10d0fcbf537de77b936cd
-    function noteToFreq(note) {
-      let a = 440; //frequency of A (common value is 440Hz)
-      return (a / 32) * 2 ** ((note - 9) / 12);
-    }
-
-    function handleMidi() {
-      const useG4 = document.getElementById("g4toggle").checked;
-      const replacem300 = document.getElementById("experimentaltoggle").checked;
       
-      
-      // Clear previous scheduled tones
-      Tone.Transport.stop();
-      Tone.Transport.cancel();
+      function calculateRSCILength(rsciLines) {
+        let totalTime = 0; // Initialize the total time
 
-      if (!midi) {
-        alert("No MIDI provided.");
-        return;
-      }
-      if (replacem300) {
-        if (!useG4) {
-          alert("You must use G4 to use this feature.")
-          return
-        }
-        alert("Note: this is very experimental, use with caution.")
-      }
-
-      const track = { notes: [] };
-
-      // Merge note arrays from selected tracks
-      for (let i = 0; i < midi.tracks.length; i++) {
-        if (document.getElementById(`trackButton${i}`).checked) {
-          let currTrack = midi.tracks[i].notes;
-          // If percussion, add a percussion flag to note
-          if (midi.tracks[i].instrument.percussion) {
-            currTrack.forEach((note) => {
-              note.percussion = true;
-            });
+        rsciLines.forEach(line => {
+          const match = line.match(/(\d+) (\d+)/i); // Match M300 command with duration
+          if (match) {
+            const duration = parseInt(match[1], 10); // Parse the duration
+            totalTime += duration; // Accumulate total time with this duration
           }
-          track.notes = track.notes.concat(currTrack);
+        });
+
+        // Convert the total time from milliseconds to seconds for the final value
+        return totalTime / 1000;
+      }
+
+      function mirrorRsciToDisplay() {
+        const rsciText = document.getElementById("outputArea").value;
+        const rsciDisplay = document.getElementById("outputArea");
+        rsciDisplay.innerHTML = ''; // Clear previous content
+
+        rsciText.split("\n").forEach((line, index) => {
+          const lineSpan = document.createElement("span");
+          lineSpan.textContent = line + "\n"; // Add line break for display
+          lineSpan.id = `rsci-line-${index}`; // Unique ID for each line
+          rsciDisplay.appendChild(lineSpan);
+        });
+      }
+
+      function playNote(frequency, duration) {
+        // Simulate a startup time of 5ms
+        return (time) => { synth.triggerAttackRelease(frequency, duration / 1000, time) };
+      }
+
+      function toggleLoop() {
+        isLooping = !isLooping; // Toggle looping state
+        document.getElementById('loopToggle').innerText = isLooping ? "Disable Loop" : "Enable Loop";
+
+        if (isLooping) {
+          const rsci = document.getElementById("outputArea").value.split("\n");
+          const rsciLength = calculateRSCILength(rsci);
+          Tone.Transport.loop = true;
+          Tone.Transport.loopStart = 0;
+          Tone.Transport.loopEnd = rsciLength; // Set loop end to the calculated RSCI time
+        } else {
+          Tone.Transport.loop = false;
         }
       }
 
-      // Sort notes by start time
-      track.notes.sort((a, b) => a.time - b.time);
+      function togglePreview() {
+        if (isLooping) {
+          alert("You must have the RSCI running first!")
+        } else{
+          const rsciLines = document.getElementById("outputArea").value.split("\n");
+          if (rsciLines.length < 2) {
+              alert("Please generate RSCI first.");
+          }else{
+              parseAndPlayRsci(rsciLines);
+          }
+        }
+      }
 
-      const tempoMultiplier =
-        1 /
-        Math.max(document.getElementById("speedMultiplierInput").value, 0.01);
+      function rsciToTime(rscitime) {
+        newtime = (1000 / 64 * rscitime)
+        return newtime
+      }
 
-      let curr = 0;
-      const gcode = [];
-      while (curr < track.notes.length) {
-        // Keep the highest non-percussion note if multiple occur at the same time
-        let highestCurrNote = track.notes[curr].percussion ? -1 : track.notes[curr].midi;
-        let duration = track.notes[curr].duration;
-        while (
-          curr + 1 < track.notes.length &&
-          track.notes[curr].time === track.notes[curr + 1].time
-        ) {
-          curr++;
-          if (track.notes[curr].midi > highestCurrNote && !track.notes[curr].percussion) {
-            duration = track.notes[curr].duration;
+      function rsciToFrequency(note) {
+        if(note == 23) {
+          
+        }
+        if (roombaNotes.hasOwnProperty(note)) {
+            return roombaNotes[note].frequency;
+        }else{
+          console.log("Could not find frequency for Roomba note ${note}")
+        }
+      }
+
+      function parseAndPlayRsci(rsciLines) {
+        // Stop and clear the current Transport schedule
+        Tone.Transport.cancel();
+        Tone.Transport.stop();
+
+        let currentTimeframe = 0; // Keep track of cumulative time for note scheduling
+
+        // Parse each line of RSCI and schedule notes
+        rsciLines.forEach(line => {
+          const match = line.match(/(\d+) (\d+)/);
+          if (match) {
+            const duration = rsciToTime(match[1] / 1000); // Convert duration from ms to seconds
+            const frequency = rsciToFrequency(match[2]);
+            Tone.Transport.schedule(time => {
+              synth.triggerAttackRelease(frequency, duration, time);
+            }, currentTimeframe);
+
+            // Increment the currentTime by the note's duration for the next scheduling
+            currentTimeframe += duration;
+          }
+        });
+
+        // After scheduling all notes, start the Transport
+        if (isLooping) {
+          const rsciLength = calculateRSCILength(rsciLines);
+        }
+        Tone.Transport.start();
+      }
+
+      function stopPreview() {
+        Tone.Transport.stop();
+        if (isLooping) {
+          toggleLoop()
+        }
+      }
+
+      function clearCode() {
+        document.getElementById("outputArea").value = "";
+      }
+
+      function findClosestFrequency(targetFrequency) {
+          let closestKey = null;
+          let smallestDifference = Infinity;
+
+          for (let key in roombaNotes) {
+              if (roombaNotes.hasOwnProperty(key)) {
+                  const difference = Math.abs(roombaNotes[key].frequency - targetFrequency);
+                  if (difference < smallestDifference) {
+                      smallestDifference = difference;
+                      closestKey = key;
+                  }
+              }
           }
 
-          highestCurrNote = track.notes[curr].percussion ? highestCurrNote : Math.max(highestCurrNote, track.notes[curr].midi);
+          return closestKey ? {key: closestKey, ...roombaNotes[closestKey]} : null;
+      }
+
+      function findClosestTime(ms) {
+        const timebase = 1000/64;
+        length = Math.round(ms / timebase)
+        if(length > 255) return 255
+        return length
+      }
+
+      function generateTrackInfo(midi) {
+        let infoDiv = document.getElementById("trackInfo");
+        infoDiv.innerHTML = '';
+        const trackSelectors = midi.tracks.forEach((track, index) => {
+          infoDiv.innerHTML += `<input id="trackButton${index}" type="checkbox" value=${index} onchange="clearCode();"> Track ${index +
+            1}: ${track.instrument.name} - ${track.notes.length} notes<br>`;
+        });
+        infoDiv.innerHTML +=
+          'Speed multiplier: <input id="speedMultiplierInput" type="number" step="0.01" min="0.01" value="1" onchange="clearCode();">';
+        document.getElementById("trackButton0").checked = true;
+      }
+
+      // From https://gist.github.com/YuxiUx/ef84328d95b10d0fcbf537de77b936cd
+      function noteToFreq(note) {
+        let a = 440; //frequency of A (common value is 440Hz)
+        return (a / 32) * 2 ** ((note - 9) / 12);
+      }
+
+      function handleMidi() {
+        // Clear previous scheduled tones
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+
+        if (!midi) {
+          alert("No MIDI provided.");
+          return;
         }
 
-        // Default to 20ms, 100hz note to simulate percussion
-        const frequency = highestCurrNote === -1 ? 100 : noteToFreq(highestCurrNote);
-        duration = highestCurrNote === -1 ? 20 / 1000 : duration;
+        const track = { notes: [] };
 
-        const time = track.notes[curr].time;
-        const nextNoteTime =
-          curr + 1 < track.notes.length
-            ? track.notes[curr + 1].time
-            : duration + time;
-
-        // If this note overlaps the next note, cut the current note off
-        let trimmedDuration = Math.min(nextNoteTime - time, duration);
-
-        const pauseDuration = nextNoteTime - time - trimmedDuration;
-
-        // Marlin doesn't seem to deal with very short pauses accurately, so merge short pauses with the previous note.
-        // May need tuning
-        const minDuration = 20 / 1000;
-
-        if (pauseDuration < minDuration) {
-          trimmedDuration += pauseDuration;
+        // Merge note arrays from selected tracks
+        for (let i = 0; i < midi.tracks.length; i++) {
+          if (document.getElementById(`trackButton${i}`).checked) {
+            let currTrack = midi.tracks[i].notes;
+            // If percussion, add a percussion flag to note
+            if (midi.tracks[i].instrument.percussion) {
+              currTrack.forEach((note) => {
+                note.percussion = true;
+              });
+            }
+            track.notes = track.notes.concat(currTrack);
+          }
         }
-        // Write an M300 to play a note with the calculated pitch and duration
-        gcode.push(
-          `M300 P${Math.round(
-            trimmedDuration * 1000 * tempoMultiplier
-          )} S${Math.round(frequency)}\n`
-        );
 
-        // Duet firmware needs G4 pauses between notes
-        if (useG4) {
-          gcode.push(
-            `G4 P${Math.round(
-              trimmedDuration * 1000 * tempoMultiplier
-            )}\n`
+        // Sort notes by start time
+        track.notes.sort((a, b) => a.time - b.time);
+
+        const tempoMultiplier =
+          1 /
+          Math.max(document.getElementById("speedMultiplierInput").value, 0.01);
+
+        let curr = 0;
+        const rsci= [];
+        while (curr < track.notes.length) {
+          // Keep the highest non-percussion note if multiple occur at the same time
+          let highestCurrNote = track.notes[curr].percussion ? -1 : track.notes[curr].midi;
+          let duration = track.notes[curr].duration;
+          while (
+            curr + 1 < track.notes.length &&
+            track.notes[curr].time === track.notes[curr + 1].time
+          ) {
+            curr++;
+            if (track.notes[curr].midi > highestCurrNote && !track.notes[curr].percussion) {
+              duration = track.notes[curr].duration;
+            }
+
+            highestCurrNote = track.notes[curr].percussion ? highestCurrNote : Math.max(highestCurrNote, track.notes[curr].midi);
+          }
+
+          // Default to 20ms, 100hz note to simulate percussion
+          const frequency = highestCurrNote === -1 ? 100 : noteToFreq(highestCurrNote);
+          duration = highestCurrNote === -1 ? 20 / 1000 : duration;
+          
+          const time = track.notes[curr].time;
+          const nextNoteTime =
+            curr + 1 < track.notes.length
+              ? track.notes[curr + 1].time
+              : duration + time;
+
+          // If this note overlaps the next note, cut the current note off
+          let trimmedDuration = Math.min(nextNoteTime - time, duration);
+
+          const pauseDuration = nextNoteTime - time - trimmedDuration;
+
+          // Marlin doesn't seem to deal with very short pauses accurately, so merge short pauses with the previous note.
+          // May need tuning
+          const minDuration = 20 / 1000;
+
+          if (pauseDuration < minDuration) {
+            trimmedDuration += pauseDuration;
+          }
+          // Write an M300 to play a note with the calculated pitch and duration
+          rsci.push(
+            [
+              findClosestTime(trimmedDuration * 1000 * tempoMultiplier),
+              findClosestFrequency(frequency).key
+            ]
           );
-        }
 
-        // Schedule note to be played in GCODE preview
-        Tone.Transport.schedule(playNote(frequency, trimmedDuration * tempoMultiplier), time * tempoMultiplier);
+          // Schedule note to be played in RSCI preview
+          Tone.Transport.schedule(playNote(frequency, trimmedDuration * tempoMultiplier), time * tempoMultiplier);
 
-        // If the current note is released before the start of the next note, insert a pause
-        if (pauseDuration >= minDuration && !replacem300) {
-          gcode.push(
-            `M300 P${Math.round(pauseDuration * tempoMultiplier * 1000)} S0\n`
-          );
-
-          if (useG4) {
-            gcode.push(
-              `G4 P${Math.round(pauseDuration * tempoMultiplier * 1000)}\n`
+          // If the current note is released before the start of the next note, insert a pause
+          if (pauseDuration >= minDuration) {
+            rsci.push(
+              [
+                findClosestTime(pauseDuration * tempoMultiplier * 1000),
+                23
+              ]
             );
           }
+          curr++;
         }
 
-        curr++;
+        // Initialize the output variable as an empty string
+        let output = "";
+
+        for (let i = 0; i < rsci.length; i++) {
+            // Append the concatenated string to the output variable
+            output += rsci[i][0] + " " + rsci[i][1] + "\n";
+        }
+        // const output = rsci.reduce((acc, e) => acc + e, "");
+        document.getElementById("outputArea").value = output;
       }
-
-      const output = gcode.reduce((acc, e) => acc + e, "");
-      document.getElementById("outputArea").value = output;
-    }
-  </script>
-</body>
-
+    </script>
+  </body>
 </html>
